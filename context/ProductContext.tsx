@@ -19,20 +19,29 @@ export const ProductProvider: React.FC<ProductProviderProps> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // In a real app, you'd fetch this from an API
+    // In a real app, you'd fetch this from an API.
+    // Em desenvolvimento, ignoramos o localStorage para refletir sempre o conteúdo de mockProducts.
+    const isDev = import.meta.env.DEV;
+
+    if (isDev) {
+      setProducts(mockProducts);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-        const storedProducts = localStorage.getItem('pharma_products');
-        if (storedProducts) {
-            setProducts(JSON.parse(storedProducts));
-        } else {
-            setProducts(mockProducts);
-            localStorage.setItem('pharma_products', JSON.stringify(mockProducts));
-        }
-    } catch (error) {
-        console.error("Failed to load products from localStorage", error);
+      const storedProducts = localStorage.getItem('pharma_products');
+      if (storedProducts) {
+        setProducts(JSON.parse(storedProducts));
+      } else {
         setProducts(mockProducts);
+        localStorage.setItem('pharma_products', JSON.stringify(mockProducts));
+      }
+    } catch (error) {
+      console.error('Failed to load products from localStorage', error);
+      setProducts(mockProducts);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
