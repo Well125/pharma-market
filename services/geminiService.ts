@@ -1,7 +1,20 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Product, ChatMessage } from "../types";
 
-const API_KEY = process.env.API_KEY;
+// Safely access process.env
+const getApiKey = () => {
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore reference errors
+  }
+  return '';
+};
+
+const API_KEY = getApiKey();
 
 if (!API_KEY) {
   console.warn("API_KEY environment variable not set. AI features will not work.");
