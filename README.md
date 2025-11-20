@@ -7,7 +7,7 @@
 `npm install`
 
 
-3. Defina a variável `GEMINI_API_KEY` no arquivo `(.env.local)` com a sua chave de API do Gemini.
+3. Defina a variável `GEMINI_API_KEY` = AIzaSyCS7r4ZBiQuxfrXJlEuXk9dkdcrq9HuuwU no arquivo `(.env.local)` com a sua chave de API do Gemini.
 
 
 4. Execute o aplicativo:
