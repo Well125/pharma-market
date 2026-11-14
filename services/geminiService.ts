@@ -1,118 +1,66 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
 import type { Product, ChatMessage } from "../types";
 
-// Safely access process.env
-const getApiKey = () => {
-  try {
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
-    }
-  } catch (e) {
-    // Ignore reference errors
+// O navegador NÃO fala direto com o Gemini: ele chama as rotas /api/*,
+// que rodam no servidor (Vercel Functions) e guardam a chave GEMINI_API_KEY.
+
+class MissingApiKeyError extends Error {}
+
+async function postJson<T>(url: string, payload: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (response.status === 503 && data?.error === "missing_api_key") {
+    throw new MissingApiKeyError(data.message);
   }
-  return '';
-};
-
-const API_KEY = getApiKey();
-
-if (!API_KEY) {
-  console.warn("API_KEY environment variable not set. AI features will not work.");
+  if (!response.ok) {
+    throw new Error(data?.message || `Erro ${response.status} ao chamar ${url}`);
+  }
+  return data as T;
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function getAIRecommendations(
   userPrompt: string,
   products: Product[]
 ): Promise<string[]> {
-  if (!API_KEY) {
-    // Simulate a delay and return a mock response if API key is not available
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return ["Analgésico", "Vitamina C", "Xarope para Tosse"];
-  }
-
-  const productNames = products.map(p => p.name);
-
-  const model = "gemini-2.5-flash";
-  const systemInstruction = `Você é um assistente de farmácia virtual útil. Sua tarefa é recomendar produtos com base nos sintomas do usuário.
-    Você SÓ PODE recomendar produtos da lista fornecida.
-    NÃO forneça conselhos médicos.
-    Responda APENAS com um array JSON de strings, contendo os nomes dos produtos recomendados.
-    Se nenhum produto corresponder, retorne um array vazio.`;
-
-  const fullPrompt = `Sintomas do usuário: "${userPrompt}".\n\nLista de produtos disponíveis: ${JSON.stringify(
-    productNames
-  )}`;
-
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: fullPrompt,
-      config: {
-        systemInstruction: systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.STRING,
-            description: "O nome de um produto recomendado da lista fornecida.",
-          },
-        },
-        temperature: 0.2,
-      },
-    });
-
-    const jsonText = response.text.trim();
-    const recommendations: string[] = JSON.parse(jsonText);
-
+    const { recommendations } = await postJson<{ recommendations: string[] }>(
+      "/api/recommendations",
+      { prompt: userPrompt, productNames: products.map((p) => p.name) }
+    );
     return recommendations;
-
   } catch (error) {
-    console.error("Error calling Gemini API:", error);
+    if (error instanceof MissingApiKeyError) {
+      // Sem chave configurada no servidor: devolve uma resposta de exemplo.
+      console.warn("GEMINI_API_KEY não configurada no servidor. Usando resposta de exemplo.");
+      await delay(1500);
+      return ["Analgésico", "Vitamina C", "Xarope para Tosse"];
+    }
+    console.error("Error calling recommendations API:", error);
     throw new Error("Failed to get AI recommendations.");
   }
 }
 
 export async function getPharmacistResponse(
   userPrompt: string,
-  history: ChatMessage[]
+  _history: ChatMessage[]
 ): Promise<string> {
-  if (!API_KEY) {
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return "Olá! Sou a assistente farmacêutica virtual. Como posso ajudar? Lembre-se, para questões médicas sérias, consulte um profissional de saúde.";
-  }
-  
-  const model = "gemini-2.5-flash";
-  const systemInstruction = `Você é um assistente farmacêutico de IA. Seu nome é FarmaBot.
-Seja amigável, prestativo e profissional. Forneça informações gerais sobre saúde e bem-estar.
-NÃO forneça diagnósticos ou prescrições.
-SEMPRE inclua um aviso para que o usuário consulte um médico ou farmacêutico real para aconselhamento médico personalizado.
-Mantenha as respostas concisas e fáceis de entender.`;
-
-  // We are not using chat history for now to keep it simple, but this is how you would.
-  // const contents = [
-  //   ...history.map(msg => ({
-  //     role: msg.sender === 'user' ? 'user' : 'model',
-  //     parts: [{ text: msg.text }]
-  //   })),
-  //   { role: 'user', parts: [{ text: userPrompt }] }
-  // ];
-
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
-      },
-    });
-
-    return response.text;
-
+    const { reply } = await postJson<{ reply: string }>("/api/pharmacist", { prompt: userPrompt });
+    return reply;
   } catch (error) {
-    console.error("Error calling Gemini API for pharmacist chat:", error);
+    if (error instanceof MissingApiKeyError) {
+      console.warn("GEMINI_API_KEY não configurada no servidor. Usando resposta de exemplo.");
+      await delay(1500);
+      return "Olá! Sou a assistente farmacêutica virtual. Como posso ajudar? Lembre-se, para questões médicas sérias, consulte um profissional de saúde.";
+    }
+    console.error("Error calling pharmacist API:", error);
     throw new Error("Failed to get response from AI pharmacist.");
   }
 }
