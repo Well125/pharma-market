@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Variáveis de ambiente e configuração local da Vercel (nunca versionar chaves)
+.env
+.env.*
+!.env.example
+.vercel
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
